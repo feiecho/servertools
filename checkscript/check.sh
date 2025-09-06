@@ -4,7 +4,7 @@
 # 使用前请以root权限运行，建议定期执行（如每日/每周）
 
 # 检查是否禁用颜色输出的环境变量
-if [ -n "$NO_COLOR" ] || [ "$TERM" = "dumb" ] || [ -t 1 = false ]; then
+if [ -n "$NO_COLOR" ] || [ "$TERM" = "dumb" ] || ! [ -t 1 ]; then
     # 强制禁用颜色输出
     RED=''
     GREEN=''
@@ -14,14 +14,25 @@ if [ -n "$NO_COLOR" ] || [ "$TERM" = "dumb" ] || [ -t 1 = false ]; then
     COLOR_ENABLED=false
 else
     # 检测当前终端是否支持颜色
-    if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
-        # 支持颜色的终端
-        RED='\033[0;31m'
-        GREEN='\033[0;32m'
-        YELLOW='\033[1;33m'
-        BLUE='\033[0;34m'
-        NC='\033[0m' # 无颜色
-        COLOR_ENABLED=true
+    if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+        colors=$(tput colors 2>/dev/null)
+        if [ -n "$colors" ] && [ "$colors" -ge 8 ]; then
+            # 支持颜色的终端
+            RED='\033[0;31m'
+            GREEN='\033[0;32m'
+            YELLOW='\033[1;33m'
+            BLUE='\033[0;34m'
+            NC='\033[0m' # 无颜色
+            COLOR_ENABLED=true
+        else
+            # 不支持颜色，使用空字符串
+            RED=''
+            GREEN=''
+            YELLOW=''
+            BLUE=''
+            NC=''
+            COLOR_ENABLED=false
+        fi
     else
         # 不支持颜色或非交互式终端，使用空字符串
         RED=''
@@ -340,7 +351,7 @@ for pid_dir in /proc/[0-9]*; do
 done | sort -nr | head -10 | while read count pid; do
     if [ -n "$pid" ] && [ "$pid" -gt 0 ]; then
         cmd=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
-        rank=$(expr $rank + 1)
+        rank=$((rank + 1))
         printf "    %-5d %-6d %-7d %s\n" $rank $pid $count "$cmd"
         add_to_report "    $rank    $pid    $count    $cmd"
     fi
