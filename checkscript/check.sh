@@ -3,12 +3,22 @@
 # 功能整合：安全检测、性能监控、环境变量检查、句柄分析、服务状态监控等
 # 使用前请以root权限运行，建议定期执行（如每日/每周）
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # 无颜色
+# 检测当前终端是否支持颜色
+if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
+    # 支持颜色的终端
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # 无颜色
+else
+    # 不支持颜色或非交互式终端，使用空字符串
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+fi
 
 # 浮点数比较函数（兼容性更好）
 compare_float() {
@@ -245,7 +255,8 @@ done | sort -nr | head -10 | while read count pid; do
 done
 
 # 4. 系统性能深度检测
-echo "\n${BLUE}4. 系统性能检测${NC}"
+echo ""
+echo "${BLUE}4. 系统性能检测${NC}"
 echo ""
 add_to_report ""
 add_to_report "4. 系统性能检测"
@@ -260,16 +271,40 @@ echo "    CPU核心数: $cpu_cores"
 add_to_report "    CPU型号: $cpu_model"
 add_to_report "    CPU核心数: $cpu_cores"
 
-cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average:/ && /all/ {printf "%.2f", 100 - $NF}' || echo "")
-if [ -z "$cpu_usage" ]; then
-    cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average/ && NF>10 {printf "%.2f", 100 - $(NF-1)}' || echo "")
-fi
-if [ -z "$cpu_usage" ]; then
-    cpu_usage=$(sar -u 5 1 2>/dev/null | awk '/Average/ {printf "%.2f", 100 - $NF}' || echo "")
-fi
-if [ -z "$cpu_usage" ]; then
-    cpu_usage="未能获取"
-fi
+# 获取CPU使用率（适配CentOS 7）
+get_cpu_usage() {
+    # 方法1: 使用sar命令
+    cpu_usage=$(sar -u 5 1 2>/dev/null | awk '/Average:/ && /%idle/ {printf "%.2f", 100 - $NF}' 2>/dev/null)
+    
+    # 方法2: 使用mpstat（新版本格式）
+    if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
+        cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average:/ && /all/ {printf "%.2f", 100 - $NF}' 2>/dev/null)
+    fi
+    
+    # 方法3: 使用mpstat（旧版本格式）
+    if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
+        cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average/ && NF>=10 {printf "%.2f", 100 - $(NF-1)}' 2>/dev/null)
+    fi
+    
+    # 方法4: 使用vmstat
+    if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
+        cpu_usage=$(vmstat 5 2 2>/dev/null | awk 'NR==4 {printf "%.2f", 100 - $15}' 2>/dev/null)
+    fi
+    
+    # 方法5: 使用top命令
+    if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
+        cpu_usage=$(top -bn1 | awk '/%Cpu/ {printf "%.2f", 100 - $8}' | sed 's/id,//' 2>/dev/null)
+    fi
+    
+    # 如果仍然无法获取，返回默认值
+    if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
+        echo "未能获取"
+    else
+        echo "$cpu_usage"
+    fi
+}
+
+cpu_usage=$(get_cpu_usage)
 echo "    CPU平均使用率(5秒): $cpu_usage%"
 add_to_report "    CPU平均使用率(5秒): $cpu_usage%"
 
@@ -278,13 +313,15 @@ if compare_float "$cpu_usage" ">" "80"; then
     add_to_report "    ${RED}警告: CPU使用率超过80%${NC}"
 fi
 
-echo "\n    CPU占用TOP5进程:"
+echo ""
+echo "    CPU占用TOP5进程:"
 ps -eo %cpu,pid,user,comm --sort=-%cpu | head -6 | awk 'NR==1 {print "      " $0} NR>1 {printf "      %.2f%%  %-6d %-8s %s\n", $1, $2, $3, $4}'
 add_to_report "    CPU占用TOP5进程:"
 ps -eo %cpu,pid,user,comm --sort=-%cpu | head -6 >> $REPORT_FILE
 
 # 4.2 内存性能分析
-echo "\n  内存性能分析..."
+echo ""
+echo "  内存性能分析..."
 mem_total=$(free -h | grep Mem | awk '{print $2}')
 mem_used=$(free -h | grep Mem | awk '{print $3}')
 mem_free=$(free -h | grep Mem | awk '{print $4}')
@@ -305,13 +342,15 @@ if compare_float "$mem_used_percent" ">" "85"; then
     add_to_report "    ${RED}警告: 内存使用率超过85%${NC}"
 fi
 
-echo "\n    内存占用TOP5进程:"
+echo ""
+echo "    内存占用TOP5进程:"
 ps -eo %mem,rss,pid,user,comm --sort=-%mem | head -6 | awk 'NR==1 {print "      " $0} NR>1 {printf "      %.2f%%  %-6s %-6d %-8s %s\n", $1, $2"K", $3, $4, $5}'
 add_to_report "    内存占用TOP5进程:"
 ps -eo %mem,rss,pid,user,comm --sort=-%mem | head -6 >> $REPORT_FILE
 
 # 4.3 磁盘性能分析
-echo "\n  磁盘性能分析..."
+echo ""
+echo "  磁盘性能分析..."
 echo "    磁盘分区使用率:"
 add_to_report "    磁盘分区使用率:"
 df -h | grep -vE 'tmpfs|loop|udev' | awk 'NR>1 {print $0}' | while read line; do
@@ -324,25 +363,29 @@ df -h | grep -vE 'tmpfs|loop|udev' | awk 'NR>1 {print $0}' | while read line; do
     fi
 done
 
-echo "\n    磁盘I/O性能(5秒采样):"
+echo ""
+echo "    磁盘I/O性能(5秒采样):"
 iostat -x 5 1 | awk 'NR>3 {printf "      %-8s  读速: %-6sB/s  写速: %-6sB/s  利用率: %s\n", $1, $6*512, $7*512, $14 "%"}'
 add_to_report "    磁盘I/O性能(5秒采样):"
 iostat -x 5 1 | awk 'NR>3' >> $REPORT_FILE
 
 # 4.4 网络性能分析
-echo "\n  网络性能分析..."
+echo ""
+echo "  网络性能分析..."
 echo "    网络接口流量(5秒采样):"
 sar -n DEV 5 1 | awk 'NR>2 {if($6+$7>0) printf "      %-6s  接收: %-6sB/s  发送: %-6sB/s  总流量: %-6sB/s\n", $2, $6, $7, $6+$7}'
 add_to_report "    网络接口流量(5秒采样):"
 sar -n DEV 5 1 | awk 'NR>2' >> $REPORT_FILE
 
-echo "\n    网络连接状态分布:"
+echo ""
+echo "    网络连接状态分布:"
 netstat -ant | awk '/^tcp/ {++S[$NF]} END {for(a in S) print "      " a ": " S[a] " 个连接"}'
 add_to_report "    网络连接状态分布:"
 netstat -ant | awk '/^tcp/ {++S[$NF]} END {for(a in S) print "      " a ": " S[a] " 个连接"}' >> $REPORT_FILE
 
 # 5. 系统安全检测
-echo "\n${BLUE}5. 系统安全检测${NC}"
+echo ""
+echo "${BLUE}5. 系统安全检测${NC}"
 echo ""
 add_to_report ""
 add_to_report "5. 系统安全检测"
@@ -368,7 +411,8 @@ else
 fi
 
 # 5.2 关键文件权限检查
-echo "\n  关键文件权限检查..."
+echo ""
+echo "  关键文件权限检查..."
 critical_files="/etc/passwd /etc/shadow /etc/sudoers /etc/group /etc/hosts /etc/resolv.conf"
 
 for file in $critical_files; do
@@ -410,7 +454,8 @@ for file in $critical_files; do
 done
 
 # 5.3 SSH与防火墙检查
-echo "\n  远程访问与防火墙检查..."
+echo ""
+echo "  远程访问与防火墙检查..."
 ssh_config="/etc/ssh/sshd_config"
 if [ -f "$ssh_config" ]; then
     root_login=$(grep -E '^PermitRootLogin' $ssh_config | awk '{print $2}')
@@ -444,7 +489,8 @@ elif command -v firewalld >/dev/null 2>&1; then
 fi
 
 # 6. 服务与系统更新检查
-echo "\n${BLUE}6. 服务状态与系统更新${NC}"
+echo ""
+echo "${BLUE}6. 服务状态与系统更新${NC}"
 echo ""
 add_to_report ""
 add_to_report "6. 服务状态与系统更新"
@@ -469,7 +515,8 @@ for service in $critical_services; do
 done
 
 # 6.2 系统更新检查
-echo "\n  系统更新检查..."
+echo ""
+echo "  系统更新检查..."
 if command -v apt >/dev/null 2>&1; then
     updates=$(apt list --upgradable 2>/dev/null | wc -l)
     security_updates=$(apt list --upgradable 2>/dev/null | grep -i security | wc -l)
@@ -483,7 +530,8 @@ elif command -v yum >/dev/null 2>&1; then
 fi
 
 # 7. 日志与定时任务检查
-echo "\n${BLUE}7. 日志与定时任务检查${NC}"
+echo ""
+echo "${BLUE}7. 日志与定时任务检查${NC}"
 echo ""
 add_to_report ""
 add_to_report "7. 日志与定时任务检查"
@@ -503,7 +551,8 @@ else
 fi
 
 # 7.2 登录失败检查
-echo "\n  登录失败记录检查..."
+echo ""
+echo "  登录失败记录检查..."
 failed_logins=$(grep "Failed password" /var/log/secure /var/log/auth.log 2>/dev/null | tail -5)
 if [ -n "$failed_logins" ]; then
     echo "${YELLOW}    发现登录失败记录:${NC}"
@@ -517,7 +566,8 @@ else
 fi
 
 # 7.3 定时任务检查
-echo "\n  定时任务安全检查..."
+echo ""
+echo "  定时任务安全检查..."
 suspicious_crons=$(grep -r -E 'wget|curl|bash -i|nc |netcat' /etc/cron* 2>/dev/null | grep -v -E '#|/usr/bin/')
 if [ -n "$suspicious_crons" ]; then
     echo "${YELLOW}    发现可能存在风险的定时任务:${NC}"
@@ -531,7 +581,8 @@ else
 fi
 
 # 巡检总结
-echo "\n${YELLOW}===== 系统综合巡检完成 ====="
+echo ""
+echo "${YELLOW}===== 系统综合巡检完成 ====="
 echo "巡检报告已保存至: $REPORT_FILE"
 echo "重点关注项:"
 if compare_float "$usage_rate" ">" "80"; then echo "  - 系统句柄使用率过高"; fi
