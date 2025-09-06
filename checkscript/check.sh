@@ -182,10 +182,21 @@ add_to_report "    进程句柄使用TOP 10:"
 add_to_report "    排名  PID    句柄数  进程名"
 add_to_report "    -------------------------"
 
+# 使用/proc文件系统统计句柄，避免lsof的UID警告
 rank=0
-lsof -n | awk '{print $2}' | sort | uniq -c | sort -nr | head -10 | awk '{print $1, $2}' | while read count pid; do
+for pid_dir in /proc/[0-9]*; do
+    if [ -d "$pid_dir/fd" ]; then
+        pid=$(basename "$pid_dir")
+        if [ -d "/proc/$pid" ]; then
+            fd_count=$(ls "/proc/$pid/fd" 2>/dev/null | wc -l)
+            if [ "$fd_count" -gt 0 ]; then
+                echo "$fd_count $pid"
+            fi
+        fi
+    fi
+done | sort -nr | head -10 | while read count pid; do
     if [ -n "$pid" ] && [ "$pid" -gt 0 ]; then
-        cmd=$(ps -p $pid -o comm= 2>/dev/null)
+        cmd=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
         rank=$(expr $rank + 1)
         printf "    %-5d %-6d %-7d %s\n" $rank $pid $count "$cmd"
         add_to_report "    $rank    $pid    $count    $cmd"
