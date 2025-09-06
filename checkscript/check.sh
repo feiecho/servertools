@@ -76,9 +76,11 @@ REPORT_FILE="system_inspection_$(date +%Y%m%d_%H%M%S).log"
 echo "系统综合巡检报告 - $(date)" > $REPORT_FILE
 echo "" >> $REPORT_FILE
 
-# 添加内容到报告
+# 添加内容到报告（去除颜色代码）
 add_to_report() {
-    echo "$1" >> $REPORT_FILE
+    # 去除ANSI颜色代码
+    clean_text=$(echo "$1" | sed 's/\033\[[0-9;]*m//g')
+    echo "$clean_text" >> $REPORT_FILE
 }
 
 # 显示开始信息
@@ -114,7 +116,9 @@ add_to_report "  运行时间: $uptime"
 # 2. 环境变量安全检测
 echo ""
 echo "${BLUE}2. 环境变量安全检测${NC}"
-add_to_report "\n2. 环境变量安全检测"
+echo ""
+add_to_report ""
+add_to_report "2. 环境变量安全检测"
 
 # 2.1 PATH环境变量分析
 echo "  PATH环境变量分析..."
@@ -178,7 +182,9 @@ done
 
 # 3. 系统句柄数分析
 echo "\n${BLUE}3. 系统句柄数分析${NC}"
-add_to_report "\n3. 系统句柄数分析"
+echo ""
+add_to_report ""
+add_to_report "3. 系统句柄数分析"
 
 # 3.1 句柄限制配置
 echo "  句柄限制配置..."
@@ -240,7 +246,9 @@ done
 
 # 4. 系统性能深度检测
 echo "\n${BLUE}4. 系统性能检测${NC}"
-add_to_report "\n4. 系统性能检测"
+echo ""
+add_to_report ""
+add_to_report "4. 系统性能检测"
 
 # 4.1 CPU性能分析
 echo "  CPU性能分析..."
@@ -252,9 +260,12 @@ echo "    CPU核心数: $cpu_cores"
 add_to_report "    CPU型号: $cpu_model"
 add_to_report "    CPU核心数: $cpu_cores"
 
-cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average:/ && /all/ {printf "%.2f", 100 - $NF}' || echo "0.00")
-if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
-    cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average/ {printf "%.2f", 100 - $13}' || echo "0.00")
+cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average:/ && /all/ {printf "%.2f", 100 - $NF}' || echo "")
+if [ -z "$cpu_usage" ]; then
+    cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average/ && NF>10 {printf "%.2f", 100 - $(NF-1)}' || echo "")
+fi
+if [ -z "$cpu_usage" ]; then
+    cpu_usage=$(sar -u 5 1 2>/dev/null | awk '/Average/ {printf "%.2f", 100 - $NF}' || echo "")
 fi
 if [ -z "$cpu_usage" ]; then
     cpu_usage="未能获取"
@@ -332,7 +343,9 @@ netstat -ant | awk '/^tcp/ {++S[$NF]} END {for(a in S) print "      " a ": " S[a
 
 # 5. 系统安全检测
 echo "\n${BLUE}5. 系统安全检测${NC}"
-add_to_report "\n5. 系统安全检测"
+echo ""
+add_to_report ""
+add_to_report "5. 系统安全检测"
 
 # 5.1 用户安全检查
 echo "  用户安全检查..."
@@ -432,7 +445,9 @@ fi
 
 # 6. 服务与系统更新检查
 echo "\n${BLUE}6. 服务状态与系统更新${NC}"
-add_to_report "\n6. 服务状态与系统更新"
+echo ""
+add_to_report ""
+add_to_report "6. 服务状态与系统更新"
 
 # 6.1 关键服务状态
 critical_services="sshd firewalld crond rsyslog docker nginx mysql redis"
@@ -469,7 +484,9 @@ fi
 
 # 7. 日志与定时任务检查
 echo "\n${BLUE}7. 日志与定时任务检查${NC}"
-add_to_report "\n7. 日志与定时任务检查"
+echo ""
+add_to_report ""
+add_to_report "7. 日志与定时任务检查"
 
 # 7.1 错误日志检查
 echo "  系统错误日志检查..."
