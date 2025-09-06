@@ -3,21 +3,34 @@
 # 功能整合：安全检测、性能监控、环境变量检查、句柄分析、服务状态监控等
 # 使用前请以root权限运行，建议定期执行（如每日/每周）
 
-# 检测当前终端是否支持颜色
-if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
-    # 支持颜色的终端
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m' # 无颜色
-else
-    # 不支持颜色或非交互式终端，使用空字符串
+# 检查是否禁用颜色输出的环境变量
+if [ -n "$NO_COLOR" ] || [ "$TERM" = "dumb" ] || [ -t 1 = false ]; then
+    # 强制禁用颜色输出
     RED=''
     GREEN=''
     YELLOW=''
     BLUE=''
     NC=''
+    COLOR_ENABLED=false
+else
+    # 检测当前终端是否支持颜色
+    if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
+        # 支持颜色的终端
+        RED='\033[0;31m'
+        GREEN='\033[0;32m'
+        YELLOW='\033[1;33m'
+        BLUE='\033[0;34m'
+        NC='\033[0m' # 无颜色
+        COLOR_ENABLED=true
+    else
+        # 不支持颜色或非交互式终端，使用空字符串
+        RED=''
+        GREEN=''
+        YELLOW=''
+        BLUE=''
+        NC=''
+        COLOR_ENABLED=false
+    fi
 fi
 
 # 浮点数比较函数（兼容性更好）
@@ -126,17 +139,17 @@ echo "" >> $REPORT_FILE
 # 添加内容到报告（去除颜色代码）
 add_to_report() {
     # 去除ANSI颜色代码
-    clean_text=$(echo "$1" | sed 's/\033\[[0-9;]*m//g')
+    clean_text=$(echo "$1" | sed 's/\x1b\[[0-9;]*m//g')
     echo "$clean_text" >> $REPORT_FILE
 }
 
 # 显示开始信息
-echo "${YELLOW}===== 系统综合巡检工具 ====="
+echo "${YELLOW}===== 系统综合巡检工具 =====${NC}"
 echo "巡检时间: $(date)"
 echo "报告将保存至: $REPORT_FILE"
 echo "正在检查依赖工具..."
 check_dependencies
-echo "=================================${NC}"
+echo "================================="
 
 # 1. 系统基本信息
 echo ""
@@ -220,13 +233,13 @@ echo "$path_var" | tr ':' '\n' | while read -r path; do
     for danger in $dangerous_paths; do
         if [ "$path" = "$danger" ]; then
             echo "${RED}    危险路径: $path (包含在PATH中)${NC}"
-            add_to_report "    ${RED}危险路径: $path (包含在PATH中)${NC}"
+            add_to_report "    危险路径: $path (包含在PATH中)"
         fi
     done
 
     if [ -d "$path" ] && [ -w "$path" ] && ! ls -ld "$path" | grep -qE '^drwxr-xr-x'; then
         echo "${YELLOW}    可写路径: $path (存在非授权写入风险)${NC}"
-        add_to_report "    ${YELLOW}可写路径: $path (存在非授权写入风险)${NC}"
+        add_to_report "    可写路径: $path (存在非授权写入风险)"
     fi
 done
 
@@ -241,12 +254,12 @@ for var in $sensitive_vars; do
         found_sensitive=1
         echo "${YELLOW}    潜在敏感变量:${NC}"
         echo "$matches" | awk -F= '{print "      " $1 "=***(内容已隐藏)***"}'
-        add_to_report "    ${YELLOW}潜在敏感变量: $var${NC}"
+        add_to_report "    潜在敏感变量: $var"
     fi
 done
 if [ $found_sensitive -eq 0 ]; then
     echo "${GREEN}    未发现明显敏感环境变量${NC}"
-    add_to_report "    ${GREEN}未发现明显敏感环境变量${NC}"
+    add_to_report "    未发现明显敏感环境变量"
 fi
 
 # 2.3 环境配置文件检查
@@ -259,7 +272,7 @@ for file in $env_files; do
         perms=$(stat -c "%a" "$expanded_file")
         if [ "$perms" -gt 644 ]; then
             echo "${RED}    不安全权限: $expanded_file (权限$perms，建议≤644)${NC}"
-            add_to_report "    ${RED}不安全权限: $expanded_file (权限$perms，建议≤644)${NC}"
+            add_to_report "    不安全权限: $expanded_file (权限$perms，建议≤644)"
         else
             echo "    安全权限: $expanded_file (权限$perms)"
             add_to_report "    安全权限: $expanded_file (权限$perms)"
@@ -268,7 +281,8 @@ for file in $env_files; do
 done
 
 # 3. 系统句柄数分析
-echo "\n${BLUE}3. 系统句柄数分析${NC}"
+echo ""
+echo "${BLUE}3. 系统句柄数分析${NC}"
 echo ""
 add_to_report ""
 add_to_report "3. 系统句柄数分析"
@@ -299,11 +313,12 @@ add_to_report "    系统句柄整体使用率: $usage_rate%"
 
 if compare_float "$usage_rate" ">" "80"; then
     echo "${RED}    警告: 系统句柄使用率超过80%，可能面临耗尽风险${NC}"
-    add_to_report "    ${RED}警告: 系统句柄使用率超过80%，可能面临耗尽风险${NC}"
+    add_to_report "    警告: 系统句柄使用率超过80%，可能面临耗尽风险"
 fi
 
 # 3.2 进程句柄TOP分析
-echo "\n  句柄使用TOP 10进程..."
+echo ""
+echo "  句柄使用TOP 10进程..."
 echo "    排名  PID    句柄数  进程名"
 echo "    -------------------------"
 add_to_report "    进程句柄使用TOP 10:"
@@ -394,7 +409,7 @@ add_to_report "    CPU平均使用率(5秒): $cpu_usage%"
 
 if compare_float "$cpu_usage" ">" "80"; then
     echo "${RED}    警告: CPU使用率超过80%${NC}"
-    add_to_report "    ${RED}警告: CPU使用率超过80%${NC}"
+    add_to_report "    警告: CPU使用率超过80%"
 fi
 
 echo ""
@@ -423,7 +438,7 @@ add_to_report "    可用内存: $mem_available"
 
 if compare_float "$mem_used_percent" ">" "85"; then
     echo "${RED}    警告: 内存使用率超过85%${NC}"
-    add_to_report "    ${RED}警告: 内存使用率超过85%${NC}"
+    add_to_report "    警告: 内存使用率超过85%"
 fi
 
 echo ""
@@ -444,7 +459,7 @@ df -h | grep -vE 'tmpfs|loop|udev|shm' | awk 'NR>1 {print $0}' | while read line
     filesystem=$(echo $line | awk '{print $6}')
     if [ "$usage" -gt 85 ] 2>/dev/null; then
         echo "${RED}    警告: $filesystem 分区使用率超过85%${NC}"
-        add_to_report "    ${RED}警告: $filesystem 分区使用率超过85%${NC}"
+        add_to_report "    警告: $filesystem 分区使用率超过85%"
     fi
 done
 
@@ -523,19 +538,19 @@ echo "  用户安全检查..."
 empty_passwords=$(awk -F: '($2 == "" && $1 != "root") {print $1}' /etc/shadow)
 if [ -z "$empty_passwords" ]; then
     echo "${GREEN}    未发现空密码账户${NC}"
-    add_to_report "    ${GREEN}未发现空密码账户${NC}"
+    add_to_report "    未发现空密码账户"
 else
     echo "${RED}    发现以下空密码账户: $empty_passwords${NC}"
-    add_to_report "    ${RED}发现以下空密码账户: $empty_passwords${NC}"
+    add_to_report "    发现以下空密码账户: $empty_passwords"
 fi
 
 privileged_users=$(awk -F: '($3 == 0 && $1 != "root") {print $1}' /etc/passwd)
 if [ -z "$privileged_users" ]; then
     echo "${GREEN}    未发现除root外的特权用户${NC}"
-    add_to_report "    ${GREEN}未发现除root外的特权用户${NC}"
+    add_to_report "    未发现除root外的特权用户"
 else
     echo "${RED}    发现以下非root特权用户: $privileged_users${NC}"
-    add_to_report "    ${RED}发现以下非root特权用户: $privileged_users${NC}"
+    add_to_report "    发现以下非root特权用户: $privileged_users"
 fi
 
 # 5.2 关键文件权限检查
@@ -550,34 +565,34 @@ for file in $critical_files; do
             "/etc/shadow")
                 if [ "$perms" -ne 400 ]; then
                     echo "${RED}    不安全的权限: $file 权限为 $perms (应设置为400)${NC}"
-                    add_to_report "    ${RED}不安全的权限: $file 权限为 $perms (应设置为400)${NC}"
+                    add_to_report "    不安全的权限: $file 权限为 $perms (应设置为400)"
                 else
                     echo "${GREEN}    安全的权限: $file 权限为 $perms${NC}"
-                    add_to_report "    ${GREEN}安全的权限: $file 权限为 $perms${NC}"
+                    add_to_report "    安全的权限: $file 权限为 $perms"
                 fi
                 ;;
             "/etc/sudoers")
                 if [ "$perms" -ne 440 ]; then
                     echo "${RED}    不安全的权限: $file 权限为 $perms (应设置为440)${NC}"
-                    add_to_report "    ${RED}不安全的权限: $file 权限为 $perms (应设置为440)${NC}"
+                    add_to_report "    不安全的权限: $file 权限为 $perms (应设置为440)"
                 else
                     echo "${GREEN}    安全的权限: $file 权限为 $perms${NC}"
-                    add_to_report "    ${GREEN}安全的权限: $file 权限为 $perms${NC}"
+                    add_to_report "    安全的权限: $file 权限为 $perms"
                 fi
                 ;;
             *)
                 if [ "$perms" -gt 644 ]; then
                     echo "${RED}    不安全的权限: $file 权限为 $perms (建议不高于644)${NC}"
-                    add_to_report "    ${RED}不安全的权限: $file 权限为 $perms (建议不高于644)${NC}"
+                    add_to_report "    不安全的权限: $file 权限为 $perms (建议不高于644)"
                 else
                     echo "${GREEN}    安全的权限: $file 权限为 $perms${NC}"
-                    add_to_report "    ${GREEN}安全的权限: $file 权限为 $perms${NC}"
+                    add_to_report "    安全的权限: $file 权限为 $perms"
                 fi
                 ;;
         esac
     else
         echo "${YELLOW}    警告: 未找到文件 $file${NC}"
-        add_to_report "    ${YELLOW}警告: 未找到文件 $file${NC}"
+        add_to_report "    警告: 未找到文件 $file"
     fi
 done
 
@@ -589,10 +604,10 @@ if [ -f "$ssh_config" ]; then
     root_login=$(grep -E '^PermitRootLogin' $ssh_config | awk '{print $2}')
     if [ "$root_login" = "no" ]; then
         echo "${GREEN}    SSH已禁用root直接登录${NC}"
-        add_to_report "    ${GREEN}SSH已禁用root直接登录${NC}"
+        add_to_report "    SSH已禁用root直接登录"
     else
         echo "${RED}    SSH允许root直接登录 (建议设置为PermitRootLogin no)${NC}"
-        add_to_report "    ${RED}SSH允许root直接登录 (建议设置为PermitRootLogin no)${NC}"
+        add_to_report "    SSH允许root直接登录 (建议设置为PermitRootLogin no)"
     fi
 fi
 
@@ -600,19 +615,19 @@ if command -v ufw >/dev/null 2>&1; then
     ufw_status=$(ufw status | grep "Status" | awk '{print $2}')
     if [ "$ufw_status" = "active" ]; then
         echo "${GREEN}    UFW防火墙已激活${NC}"
-        add_to_report "    ${GREEN}UFW防火墙已激活${NC}"
+        add_to_report "    UFW防火墙已激活"
     else
         echo "${RED}    UFW防火墙未激活${NC}"
-        add_to_report "    ${RED}UFW防火墙未激活${NC}"
+        add_to_report "    UFW防火墙未激活"
     fi
 elif command -v firewalld >/dev/null 2>&1; then
     firewalld_status=$(systemctl is-active firewalld)
     if [ "$firewalld_status" = "active" ]; then
         echo "${GREEN}    firewalld防火墙已激活${NC}"
-        add_to_report "    ${GREEN}firewalld防火墙已激活${NC}"
+        add_to_report "    firewalld防火墙已激活"
     else
         echo "${RED}    firewalld防火墙未激活${NC}"
-        add_to_report "    ${RED}firewalld防火墙未激活${NC}"
+        add_to_report "    firewalld防火墙未激活"
     fi
 fi
 
@@ -630,14 +645,14 @@ echo "  关键服务状态检查..."
 for service in $critical_services; do
     if systemctl is-active --quiet $service; then
         echo "${GREEN}    服务正常运行: $service${NC}"
-        add_to_report "    ${GREEN}服务正常运行: $service${NC}"
+        add_to_report "    服务正常运行: $service"
     else
         if systemctl list-unit-files --type=service | grep -q "$service"; then
             echo "${RED}    服务已安装但未运行: $service${NC}"
-            add_to_report "    ${RED}服务已安装但未运行: $service${NC}"
+            add_to_report "    服务已安装但未运行: $service"
         else
             echo "${YELLOW}    服务未安装: $service${NC}"
-            add_to_report "    ${YELLOW}服务未安装: $service${NC}"
+            add_to_report "    服务未安装: $service"
         fi
     fi
 done
@@ -717,11 +732,11 @@ if [ -n "$log_files" ]; then
         done
     else
         echo "${GREEN}    未发现明显错误日志${NC}"
-        add_to_report "    ${GREEN}未发现明显错误日志${NC}"
+        add_to_report "    未发现明显错误日志"
     fi
 else
     echo "${YELLOW}    未找到系统日志文件${NC}"
-    add_to_report "    ${YELLOW}未找到系统日志文件${NC}"
+    add_to_report "    未找到系统日志文件"
 fi
 
 # 7.2 登录失败检查
@@ -750,11 +765,11 @@ if [ -n "$auth_log_files" ]; then
         done
     else
         echo "${GREEN}    未发现登录失败记录${NC}"
-        add_to_report "    ${GREEN}未发现登录失败记录${NC}"
+        add_to_report "    未发现登录失败记录"
     fi
 else
     echo "${YELLOW}    未找到认证日志文件${NC}"
-    add_to_report "    ${YELLOW}未找到认证日志文件${NC}"
+    add_to_report "    未找到认证日志文件"
 fi
 
 # 7.3 定时任务检查
@@ -769,19 +784,19 @@ if [ -n "$suspicious_crons" ]; then
     done
 else
     echo "${GREEN}    未发现明显风险的系统级定时任务${NC}"
-    add_to_report "    ${GREEN}未发现明显风险的系统级定时任务${NC}"
+    add_to_report "    未发现明显风险的系统级定时任务"
 fi
 
 # 巡检总结
 echo ""
-echo "${YELLOW}===== 系统综合巡检完成 ====="
+echo "${YELLOW}===== 系统综合巡检完成 =====${NC}"
 echo "巡检报告已保存至: $REPORT_FILE"
 echo "重点关注项:"
 if compare_float "$usage_rate" ">" "80"; then echo "  - 系统句柄使用率过高"; fi
 if compare_float "$cpu_usage" ">" "80"; then echo "  - CPU使用率过高"; fi
 if compare_float "$mem_used_percent" ">" "85"; then echo "  - 内存使用率过高"; fi
 if [ -n "$empty_passwords" ] || [ -n "$privileged_users" ]; then echo "  - 用户安全配置存在问题"; fi
-echo "=========================${NC}"
+echo "========================="
 
 echo ""
 add_to_report "===== 巡检总结 ====="
