@@ -10,6 +10,36 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # 无颜色
 
+# 浮点数比较函数（兼容性更好）
+compare_float() {
+    # 参数: $1=值1 $2=操作符(> < >= <=) $3=值2
+    local val1="$1"
+    local op="$2"
+    local val2="$3"
+    
+    # 将浮点数转换为整数进行比较（乘以100）
+    val1_int=$(echo "$val1 * 100" | awk '{printf "%.0f", $1}')
+    val2_int=$(echo "$val2 * 100" | awk '{printf "%.0f", $1}')
+    
+    case "$op" in
+        ">")
+            [ "$val1_int" -gt "$val2_int" ]
+            ;;
+        "<")
+            [ "$val1_int" -lt "$val2_int" ]
+            ;;
+        ">=")
+            [ "$val1_int" -ge "$val2_int" ]
+            ;;
+        "<=")
+            [ "$val1_int" -le "$val2_int" ]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # 检查是否以root权限运行
 if [ "$(id -u)" -ne 0 ]; then
     echo "${RED}错误：此脚本需要以root权限运行，请使用sudo或切换到root用户${NC}"
@@ -166,11 +196,11 @@ echo "    用户级句柄限制(硬): $user_hard"
 add_to_report "    用户级句柄限制(软): $user_soft"
 add_to_report "    用户级句柄限制(硬): $user_hard"
 
-usage_rate=$(echo "scale=2; $sys_current_max / $sys_max_open * 100" | bc)
+usage_rate=$(echo "scale=2; $sys_current_max / $sys_max_open * 100" | awk '{printf "%.2f", $1/$2*100}' <<< "$sys_current_max $sys_max_open")
 echo "    系统句柄整体使用率: $usage_rate%"
 add_to_report "    系统句柄整体使用率: $usage_rate%"
 
-if [ $(echo "$usage_rate > 80" | bc) -eq 1 ]; then
+if compare_float "$usage_rate" ">" "80"; then
     echo "${RED}    警告: 系统句柄使用率超过80%，可能面临耗尽风险${NC}"
     add_to_report "    ${RED}警告: 系统句柄使用率超过80%，可能面临耗尽风险${NC}"
 fi
@@ -222,7 +252,7 @@ cpu_usage=$(mpstat 5 1 | awk '/Average/ {printf "%.2f", 100 - $13}')
 echo "    CPU平均使用率(5秒): $cpu_usage%"
 add_to_report "    CPU平均使用率(5秒): $cpu_usage%"
 
-if [ $(echo "$cpu_usage > 80" | bc) -eq 1 ]; then
+if compare_float "$cpu_usage" ">" "80"; then
     echo "${RED}    警告: CPU使用率超过80%${NC}"
     add_to_report "    ${RED}警告: CPU使用率超过80%${NC}"
 fi
@@ -249,7 +279,7 @@ add_to_report "    已使用: $mem_used ($mem_used_percent%)"
 add_to_report "    空闲内存: $mem_free"
 add_to_report "    可用内存: $mem_available"
 
-if [ $(echo "$mem_used_percent > 85" | bc) -eq 1 ]; then
+if compare_float "$mem_used_percent" ">" "85"; then
     echo "${RED}    警告: 内存使用率超过85%${NC}"
     add_to_report "    ${RED}警告: 内存使用率超过85%${NC}"
 fi
@@ -477,9 +507,9 @@ fi
 echo "\n${YELLOW}===== 系统综合巡检完成 ====="
 echo "巡检报告已保存至: $REPORT_FILE"
 echo "重点关注项:"
-if [ $(echo "$usage_rate > 80" | bc) -eq 1 ]; then echo "  - 系统句柄使用率过高"; fi
-if [ $(echo "$cpu_usage > 80" | bc) -eq 1 ]; then echo "  - CPU使用率过高"; fi
-if [ $(echo "$mem_used_percent > 85" | bc) -eq 1 ]; then echo "  - 内存使用率过高"; fi
+if compare_float "$usage_rate" ">" "80"; then echo "  - 系统句柄使用率过高"; fi
+if compare_float "$cpu_usage" ">" "80"; then echo "  - CPU使用率过高"; fi
+if compare_float "$mem_used_percent" ">" "85"; then echo "  - 内存使用率过高"; fi
 if [ -n "$empty_passwords" ] || [ -n "$privileged_users" ]; then echo "  - 用户安全配置存在问题"; fi
 echo "=========================${NC}"
 
@@ -487,7 +517,7 @@ echo ""
 add_to_report "===== 巡检总结 ====="
 add_to_report "检查完成时间: $(date)"
 add_to_report "重点关注项:"
-if [ $(echo "$usage_rate > 80" | bc) -eq 1 ]; then add_to_report "  - 系统句柄使用率过高"; fi
-if [ $(echo "$cpu_usage > 80" | bc) -eq 1 ]; then add_to_report "  - CPU使用率过高"; fi
-if [ $(echo "$mem_used_percent > 85" | bc) -eq 1 ]; then add_to_report "  - 内存使用率过高"; fi
+if compare_float "$usage_rate" ">" "80"; then add_to_report "  - 系统句柄使用率过高"; fi
+if compare_float "$cpu_usage" ">" "80"; then add_to_report "  - CPU使用率过高"; fi
+if compare_float "$mem_used_percent" ">" "85"; then add_to_report "  - 内存使用率过高"; fi
 if [ -n "$empty_passwords" ] || [ -n "$privileged_users" ]; then add_to_report "  - 用户安全配置存在问题"; fi
