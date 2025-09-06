@@ -140,7 +140,8 @@ echo "$path_var" | tr ':' '\n' | while read -r path; do
 done
 
 # 2.2 敏感环境变量扫描
-echo "\n  敏感环境变量扫描..."
+echo ""
+echo "  敏感环境变量扫描..."
 sensitive_vars="PASSWORD SECRET KEY TOKEN CREDENTIAL PASS DB_PASS"
 found_sensitive=0
 for var in $sensitive_vars; do
@@ -158,7 +159,8 @@ if [ $found_sensitive -eq 0 ]; then
 fi
 
 # 2.3 环境配置文件检查
-echo "\n  环境配置文件权限检查..."
+echo ""
+echo "  环境配置文件权限检查..."
 env_files="/etc/profile /etc/bashrc ~/.bashrc ~/.bash_profile"
 for file in $env_files; do
     expanded_file=$(eval echo "$file")
@@ -250,7 +252,13 @@ echo "    CPU核心数: $cpu_cores"
 add_to_report "    CPU型号: $cpu_model"
 add_to_report "    CPU核心数: $cpu_cores"
 
-cpu_usage=$(mpstat 5 1 | awk '/Average/ {printf "%.2f", 100 - $13}')
+cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average:/ && /all/ {printf "%.2f", 100 - $NF}' || echo "0.00")
+if [ -z "$cpu_usage" ] || [ "$cpu_usage" = "0.00" ]; then
+    cpu_usage=$(mpstat 5 1 2>/dev/null | awk '/Average/ {printf "%.2f", 100 - $13}' || echo "0.00")
+fi
+if [ -z "$cpu_usage" ]; then
+    cpu_usage="未能获取"
+fi
 echo "    CPU平均使用率(5秒): $cpu_usage%"
 add_to_report "    CPU平均使用率(5秒): $cpu_usage%"
 
