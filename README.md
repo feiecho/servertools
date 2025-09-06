@@ -1,93 +1,117 @@
-# ServerTools
+# 🛠️ ServerTools
 
+> 服务器管理的实用工具集合，包含各种小知识、脚本和技巧 🚀
 
+## 📋 项目简介
 
-## Getting started
+欢迎来到 ServerTools！这是一个专门收集、整理和开发服务器管理相关工具的项目。无论你是系统管理员、运维工程师还是对服务器管理感兴趣的开发者，这里都能找到实用的资源。
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## ✨ 特性
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- 🔧 **实用脚本**：自动化服务器管理任务
+- 📚 **知识库**：服务器管理的最佳实践和技巧
+- 🎯 **问题解决**：常见问题的解决方案
+- 📊 **监控工具**：服务器性能和状态监控
+- 🔒 **安全工具**：服务器安全检查和加固
 
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## 📁 项目结构
 
 ```
-cd existing_repo
-git remote add origin http://172.17.0.93/root/ServerTools.git
-git branch -M main
-git push -uf origin main
+ServerTools/
+├── checkscript/          # 检查脚本目录
+│   ├── check.md         # 检查脚本说明文档
+│   └── check.sh         # 服务器检查脚本
+└── README.md            # 项目说明文档
 ```
 
-## Integrate with your tools
+## 🚀 快速开始
 
-- [ ] [Set up project integrations](http://172.17.0.93/root/ServerTools/-/settings/integrations)
+### 环境要求
 
-## Collaborate with your team
+- Linux/Unix 系统
+- Bash 或其他兼容的 Shell
+- 根据具体工具可能需要特定的系统权限
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### 安装使用
 
-## Test and Deploy
+1. **克隆项目**
+   ```bash
+   git clone http://172.17.0.93/root/ServerTools.git
+   cd ServerTools
+   ```
 
-Use the built-in continuous integration in GitLab.
+2. **赋予脚本执行权限**
+   ```bash
+   chmod +x checkscript/*.sh
+   ```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+3. **运行脚本**
+   ```bash
+   ./checkscript/check.sh
+   ```
 
-***
+## 📖 使用指南
 
-# Editing this README
+### 🔍 检查脚本
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+位于 `checkscript/` 目录下的工具用于服务器状态检查：
 
-## Suggestions for a good README
+- `check.sh`：综合服务器健康检查脚本
+- `check.md`：详细的使用说明和参数配置
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### 💡 使用技巧
 
-## Name
-Choose a self-explaining name for your project.
+- 建议定期运行检查脚本以监控服务器状态
+- 可以将脚本添加到 crontab 中实现自动化检查
+- 根据实际需求修改脚本参数和阈值
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 🤝 贡献指南
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+我们欢迎各种形式的贡献！
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### 如何贡献
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+1. **Fork 项目**
+2. **创建特性分支** (`git checkout -b feature/AmazingFeature`)
+3. **提交更改** (`git commit -m 'Add some AmazingFeature'`)
+4. **推送到分支** (`git push origin feature/AmazingFeature`)
+5. **提交 Pull Request**
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### 贡献类型
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+- 🐛 修复 Bug
+- ✨ 新增功能
+- 📝 文档改进
+- 🎨 代码优化
+- 🧪 测试用例
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## 📋 待办清单
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- [ ] 🔄 添加系统资源监控脚本
+- [ ] 📊 开发日志分析工具
+- [ ] 🔐 增强安全检查功能
+- [ ] 🐳 Docker 容器管理工具
+- [ ] 📈 性能基准测试工具
+- [ ] 🔔 告警通知机制
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+## 🆘 支持与帮助
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+如果你在使用过程中遇到问题，可以通过以下方式获取帮助：
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- 📮 提交 Issue
+- 💬 参与讨论
+- 📧 发送邮件反馈
 
-## License
-For open source projects, say how it is licensed.
+## 📄 许可证
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+本项目采用 MIT 许可证。详情请参阅 [LICENSE](LICENSE) 文件。
+
+## 👥 贡献者
+
+感谢所有为项目做出贡献的开发者们！ 🙏
+
+---
+
+<div align="center">
+  <b>⭐ 如果这个项目对你有帮助，请给它一个星标！</b>
+</div>
