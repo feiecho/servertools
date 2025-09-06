@@ -90,7 +90,8 @@ check_dependencies
 echo "=================================${NC}"
 
 # 1. 系统基本信息
-echo "\n${BLUE}1. 系统基本信息${NC}"
+echo ""
+echo "${BLUE}1. 系统基本信息${NC}"
 add_to_report "1. 系统基本信息"
 
 os_info=$(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')
@@ -111,7 +112,8 @@ add_to_report "  IP地址: $ip_address"
 add_to_report "  运行时间: $uptime"
 
 # 2. 环境变量安全检测
-echo "\n${BLUE}2. 环境变量安全检测${NC}"
+echo ""
+echo "${BLUE}2. 环境变量安全检测${NC}"
 add_to_report "\n2. 环境变量安全检测"
 
 # 2.1 PATH环境变量分析
@@ -196,7 +198,7 @@ echo "    用户级句柄限制(硬): $user_hard"
 add_to_report "    用户级句柄限制(软): $user_soft"
 add_to_report "    用户级句柄限制(硬): $user_hard"
 
-usage_rate=$(echo "scale=2; $sys_current_max / $sys_max_open * 100" | awk '{printf "%.2f", $1/$2*100}' <<< "$sys_current_max $sys_max_open")
+usage_rate=$(echo "$sys_current_max $sys_max_open" | awk '{printf "%.2f", $1/$2*100}')
 echo "    系统句柄整体使用率: $usage_rate%"
 add_to_report "    系统句柄整体使用率: $usage_rate%"
 
