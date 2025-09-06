@@ -26,12 +26,6 @@ ServerTools/
 
 ## 🚀 快速开始
 
-### 环境要求
-
-- Linux/Unix 系统
-- Bash 或其他兼容的 Shell
-- 根据具体工具可能需要特定的系统权限
-
 ### 安装使用
 
  **克隆项目**
@@ -39,21 +33,6 @@ ServerTools/
    git clone https://github.com/feiecho/servertools.git
    cd ServerTools
    ```
-
-## 📖 使用指南
-
-### 🔍 检查脚本
-
-位于 `checkscript/` 目录下的工具用于服务器状态检查：
-
-- `check.sh`：综合服务器健康检查脚本
-- `check.md`：详细的使用说明和参数配置
-
-### 💡 使用技巧
-
-- 建议定期运行检查脚本以监控服务器状态
-- 可以将脚本添加到 crontab 中实现自动化检查
-- 根据实际需求修改脚本参数和阈值
 
 ## 🤝 贡献指南
 
@@ -74,7 +53,7 @@ ServerTools/
 
 - 📮 提交 Issue
 - 💬 参与讨论
-- 📧 发送邮件反馈
+- 📧 发送邮件反馈： x@feiecho.com
 
 ## 📄 许可证
 
