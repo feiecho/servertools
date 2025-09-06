@@ -13,28 +13,37 @@ if [ -n "$NO_COLOR" ] || [ "$TERM" = "dumb" ] || ! [ -t 1 ]; then
     NC=''
     COLOR_ENABLED=false
 else
-    # 检测当前终端是否支持颜色
-    if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
-        colors=$(tput colors 2>/dev/null)
-        if [ -n "$colors" ] && [ "$colors" -ge 8 ]; then
-            # 支持颜色的终端
-            RED='\033[0;31m'
-            GREEN='\033[0;32m'
-            YELLOW='\033[1;33m'
-            BLUE='\033[0;34m'
-            NC='\033[0m' # 无颜色
-            COLOR_ENABLED=true
+    # 检测当前终端是否支持颜色 - CentOS 7兼容版本
+    if [ -t 1 ]; then
+        # 使用tput作为首选，ANSI转义序列作为备选
+        if command -v tput >/dev/null 2>&1; then
+            colors=$(tput colors 2>/dev/null)
+            if [ -n "$colors" ] && [ "$colors" -ge 8 ]; then
+                RED=$(tput setaf 1)
+                GREEN=$(tput setaf 2)
+                YELLOW=$(tput setaf 3)
+                BLUE=$(tput setaf 4)
+                NC=$(tput sgr0)
+                COLOR_ENABLED=true
+            else
+                # CentOS 7兼容的ANSI转义序列
+                RED=$'\e[31m'
+                GREEN=$'\e[32m'
+                YELLOW=$'\e[33m'
+                BLUE=$'\e[34m'
+                NC=$'\e[0m'
+                COLOR_ENABLED=true
+            fi
         else
-            # 不支持颜色，使用空字符串
-            RED=''
-            GREEN=''
-            YELLOW=''
-            BLUE=''
-            NC=''
-            COLOR_ENABLED=false
+            # CentOS 7兼容的ANSI转义序列
+            RED=$'\e[31m'
+            GREEN=$'\e[32m'
+            YELLOW=$'\e[33m'
+            BLUE=$'\e[34m'
+            NC=$'\e[0m'
+            COLOR_ENABLED=true
         fi
     else
-        # 不支持颜色或非交互式终端，使用空字符串
         RED=''
         GREEN=''
         YELLOW=''
@@ -240,7 +249,10 @@ echo "    PATH包含 $path_count 个路径"
 add_to_report "    PATH包含 $path_count 个路径"
 
 dangerous_paths="/ /root /tmp /var/tmp /dev/shm"
-echo "$path_var" | tr ':' '\n' | while read -r path; do
+# 保存IFS并设置新的分隔符
+OLD_IFS=$IFS
+IFS=':'
+for path in $path_var; do
     for danger in $dangerous_paths; do
         if [ "$path" = "$danger" ]; then
             echo "${RED}    危险路径: $path (包含在PATH中)${NC}"
@@ -253,6 +265,7 @@ echo "$path_var" | tr ':' '\n' | while read -r path; do
         add_to_report "    可写路径: $path (存在非授权写入风险)"
     fi
 done
+IFS=$OLD_IFS
 
 # 2.2 敏感环境变量扫描
 echo ""
@@ -336,26 +349,37 @@ add_to_report "    进程句柄使用TOP 10:"
 add_to_report "    排名  PID    句柄数  进程名"
 add_to_report "    -------------------------"
 
+# 创建临时文件存储结果
+temp_file=$(mktemp)
+
 # 使用/proc文件系统统计句柄，避免lsof的UID警告
-rank=0
 for pid_dir in /proc/[0-9]*; do
     if [ -d "$pid_dir/fd" ]; then
         pid=$(basename "$pid_dir")
         if [ -d "/proc/$pid" ]; then
             fd_count=$(ls "/proc/$pid/fd" 2>/dev/null | wc -l)
             if [ "$fd_count" -gt 0 ]; then
-                echo "$fd_count $pid"
+                cmd=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
+                echo "$fd_count $pid $cmd" >> "$temp_file"
             fi
         fi
     fi
-done | sort -nr | head -10 | while read count pid; do
-    if [ -n "$pid" ] && [ "$pid" -gt 0 ]; then
-        cmd=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
-        rank=$((rank + 1))
-        printf "    %-5d %-6d %-7d %s\n" $rank $pid $count "$cmd"
-        add_to_report "    $rank    $pid    $count    $cmd"
-    fi
 done
+
+# 排序并显示结果
+if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
+    rank=0
+    sort -nr "$temp_file" | head -10 | while read count pid cmd; do
+        if [ -n "$pid" ] && [ "$pid" -gt 0 ]; then
+            rank=$((rank + 1))
+            printf "    %-5d %-6d %-7d %s\n" $rank $pid $count "$cmd"
+            add_to_report "    $rank    $pid    $count    $cmd"
+        fi
+    done
+fi
+
+# 清理临时文件
+rm -f "$temp_file"
 
 # 4. 系统性能深度检测
 echo ""
@@ -488,7 +512,9 @@ if command -v iostat >/dev/null 2>&1; then
     
     iostat -x 1 2 2>/dev/null | awk '
     /^Device:/ { header_found=1; next }
-    header_found && /^[a-zA-Z]/ && NF>=10' >> $REPORT_FILE 2>/dev/null
+    header_found && /^[a-zA-Z]/ && NF>=10 {
+        printf "      %-8s  读速: %-8.1fKB/s  写速: %-8.1fKB/s  利用率: %s%%\n", $1, $6, $7, $(NF-1)
+    }' >> $REPORT_FILE 2>/dev/null
 else
     echo "      iostat命令不可用，跳过磁盘I/O性能检测"
     add_to_report "      iostat命令不可用，跳过磁盘I/O性能检测"
@@ -513,7 +539,8 @@ if command -v sar >/dev/null 2>&1; then
 else
     echo "      sar命令不可用，使用替代方法检测网络接口"
     # 使用/proc/net/dev作为替代方案
-    for iface in $(ls /sys/class/net/ | grep -v lo); do
+    interfaces=$(ls /sys/class/net/ | grep -v lo)
+    for iface in $interfaces; do
         rx_bytes=$(cat /proc/net/dev | grep "$iface:" | awk '{print $2}')
         tx_bytes=$(cat /proc/net/dev | grep "$iface:" | awk '{print $10}')
         if [ -n "$rx_bytes" ] && [ -n "$tx_bytes" ]; then
@@ -528,11 +555,13 @@ add_to_report "    网络连接状态分布:"
 
 # 兼容不同系统的netstat命令
 if command -v netstat >/dev/null 2>&1; then
-    netstat -ant 2>/dev/null | awk '/^tcp/ {++S[$NF]} END {for(a in S) print "      " a ": " S[a] " 个连接"}'
-    netstat -ant 2>/dev/null | awk '/^tcp/ {++S[$NF]} END {for(a in S) print "      " a ": " S[a] " 个连接"}' >> $REPORT_FILE
+    connections=$(netstat -ant 2>/dev/null | awk '/^tcp/ {++S[$NF]} END {for(a in S) print "      " a ": " S[a] " 个连接"}')
+    echo "$connections"
+    echo "$connections" >> $REPORT_FILE
 elif command -v ss >/dev/null 2>&1; then
     echo "      使用ss命令检测网络连接:"
-    ss -ant 2>/dev/null | awk 'NR>1 && /^tcp/ {++S[$1]} END {for(a in S) print "      " a ": " S[a] " 个连接"}'
+    connections=$(ss -ant 2>/dev/null | awk 'NR>1 && /^tcp/ {++S[$1]} END {for(a in S) print "      " a ": " S[a] " 个连接"}')
+    echo "$connections"
 else
     echo "      netstat和ss命令都不可用，无法检测网络连接状态"
 fi
@@ -574,7 +603,7 @@ for file in $critical_files; do
         perms=$(stat -c "%a" "$file")
         case $file in
             "/etc/shadow")
-                if [ "$perms" -ne 400 ]; then
+                if [ "$perms" -ne 400 ] && [ "$perms" -ne 0 ]; then
                     echo "${RED}    不安全的权限: $file 权限为 $perms (应设置为400)${NC}"
                     add_to_report "    不安全的权限: $file 权限为 $perms (应设置为400)"
                 else
@@ -677,32 +706,36 @@ OS=$(detect_os)
 case $OS in
     ubuntu|debian)
         if command -v apt >/dev/null 2>&1; then
-            apt list --upgradable 2>/dev/null | grep -v "WARNING" > /tmp/apt_updates.tmp
-            updates=$(cat /tmp/apt_updates.tmp | wc -l)
-            security_updates=$(grep -i security /tmp/apt_updates.tmp | wc -l)
+            temp_file=$(mktemp)
+            apt list --upgradable 2>/dev/null | grep -v "WARNING" > "$temp_file"
+            updates=$(cat "$temp_file" | wc -l)
+            security_updates=$(grep -i security "$temp_file" | wc -l)
             echo "    可用系统更新: $updates 个 (其中安全更新: $security_updates 个)"
             add_to_report "    可用系统更新: $updates 个 (其中安全更新: $security_updates 个)"
-            rm -f /tmp/apt_updates.tmp
+            rm -f "$temp_file"
         fi
         ;;
     centos|rhel)
         if command -v yum >/dev/null 2>&1; then
-            yum check-update 2>/dev/null > /tmp/yum_updates.tmp
-            updates=$(grep -v "^$" /tmp/yum_updates.tmp | grep -v "Loaded plugins" | grep -v "Last metadata" | wc -l)
-            yum check-update --security 2>/dev/null > /tmp/yum_security.tmp
-            security_updates=$(grep -v "^$" /tmp/yum_security.tmp | grep -v "Loaded plugins" | grep -v "Last metadata" | wc -l)
+            temp_updates=$(mktemp)
+            temp_security=$(mktemp)
+            yum check-update 2>/dev/null > "$temp_updates"
+            updates=$(grep -v "^$" "$temp_updates" | grep -v "Loaded plugins" | grep -v "Last metadata" | wc -l)
+            yum check-update --security 2>/dev/null > "$temp_security"
+            security_updates=$(grep -v "^$" "$temp_security" | grep -v "Loaded plugins" | grep -v "Last metadata" | wc -l)
             echo "    可用系统更新: $updates 个 (其中安全更新: $security_updates 个)"
             add_to_report "    可用系统更新: $updates 个 (其中安全更新: $security_updates 个)"
-            rm -f /tmp/yum_updates.tmp /tmp/yum_security.tmp
+            rm -f "$temp_updates" "$temp_security"
         fi
         ;;
     fedora)
         if command -v dnf >/dev/null 2>&1; then
-            dnf check-update 2>/dev/null > /tmp/dnf_updates.tmp
-            updates=$(grep -v "^$" /tmp/dnf_updates.tmp | wc -l)
+            temp_file=$(mktemp)
+            dnf check-update 2>/dev/null > "$temp_file"
+            updates=$(grep -v "^$" "$temp_file" | wc -l)
             echo "    可用系统更新: $updates 个"
             add_to_report "    可用系统更新: $updates 个"
-            rm -f /tmp/dnf_updates.tmp
+            rm -f "$temp_file"
         fi
         ;;
     *)
@@ -734,10 +767,11 @@ if [ -f /var/log/system.log ]; then
 fi
 
 if [ -n "$log_files" ]; then
-    error_logs=$(grep -iE "error|fail|critical|alert|emergency" $log_files 2>/dev/null | grep -v "CRON" | tail -10)
-    if [ -n "$error_logs" ]; then
+    temp_error=$(mktemp)
+    grep -iE "error|fail|critical|alert|emergency" $log_files 2>/dev/null | grep -v "CRON" | tail -10 > "$temp_error"
+    if [ -s "$temp_error" ]; then
         echo "${YELLOW}    发现错误日志记录:${NC}"
-        echo "$error_logs" | while read line; do
+        cat "$temp_error" | while read line; do
             echo "      $line"
             add_to_report "      $line"
         done
@@ -745,6 +779,7 @@ if [ -n "$log_files" ]; then
         echo "${GREEN}    未发现明显错误日志${NC}"
         add_to_report "    未发现明显错误日志"
     fi
+    rm -f "$temp_error"
 else
     echo "${YELLOW}    未找到系统日志文件${NC}"
     add_to_report "    未找到系统日志文件"
@@ -767,10 +802,11 @@ if [ -f /var/log/authorization.log ]; then
 fi
 
 if [ -n "$auth_log_files" ]; then
-    failed_logins=$(grep "Failed password" $auth_log_files 2>/dev/null | tail -5)
-    if [ -n "$failed_logins" ]; then
+    temp_failed=$(mktemp)
+    grep "Failed password" $auth_log_files 2>/dev/null | tail -5 > "$temp_failed"
+    if [ -s "$temp_failed" ]; then
         echo "${YELLOW}    发现登录失败记录:${NC}"
-        echo "$failed_logins" | while read line; do
+        cat "$temp_failed" | while read line; do
             echo "      $line"
             add_to_report "      $line"
         done
@@ -778,6 +814,7 @@ if [ -n "$auth_log_files" ]; then
         echo "${GREEN}    未发现登录失败记录${NC}"
         add_to_report "    未发现登录失败记录"
     fi
+    rm -f "$temp_failed"
 else
     echo "${YELLOW}    未找到认证日志文件${NC}"
     add_to_report "    未找到认证日志文件"
@@ -786,10 +823,11 @@ fi
 # 7.3 定时任务检查
 echo ""
 echo "  定时任务安全检查..."
-suspicious_crons=$(grep -r -E 'wget|curl|bash -i|nc |netcat' /etc/cron* 2>/dev/null | grep -v -E '#|/usr/bin/')
-if [ -n "$suspicious_crons" ]; then
+temp_cron=$(mktemp)
+grep -r -E 'wget|curl|bash -i|nc |netcat' /etc/cron* 2>/dev/null | grep -v -E '#|/usr/bin/' > "$temp_cron"
+if [ -s "$temp_cron" ]; then
     echo "${YELLOW}    发现可能存在风险的定时任务:${NC}"
-    echo "$suspicious_crons" | while read line; do
+    cat "$temp_cron" | while read line; do
         echo "      $line"
         add_to_report "      $line"
     done
@@ -797,6 +835,7 @@ else
     echo "${GREEN}    未发现明显风险的系统级定时任务${NC}"
     add_to_report "    未发现明显风险的系统级定时任务"
 fi
+rm -f "$temp_cron"
 
 # 巡检总结
 echo ""
